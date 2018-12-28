@@ -4,10 +4,11 @@
 % forest fire simulation
 % World is list of tuples example:
 % [{1,1,on_fire},{1,2,empty},{1,3,empty},{2,1,empty},{2,2,tree},{2,3,empty},{3,1,on_fire},{3,2,tree},{3,3,on_fire}]
-main(X, Y) ->
+% Delay in ms between computing generations
+main(X, Y, Delay) ->
 	% generate random forest
 	World = [{XX, YY, random_field()} || XX <- lists:seq(1,Y),  YY <- lists:seq(1, X)],
-	loop(World, 5000).
+	loop(World, Delay).
 
 % generate random forest fields: empty, on_fire or tree
 random_field() ->
@@ -18,14 +19,34 @@ random_field() ->
 	end.
 
 loop(World, Delay) ->
-	print(World),
+	print(lists:sort(World)),
 	M = next_generation(World),
 	timer:sleep(Delay),
 	loop(M, Delay).
 
-% TODO: use pararel spawn
 next_generation(World) ->
-	lists:map(fun({X,Y,_}) -> next_cell(X,Y, World) end, World).
+	% spawn jobs: 1 job for each cell
+	% TODO: redundant - we do not use PIDs
+	PIDs = lists:foldl(
+					 fun({X, Y, _}, PIDs) ->
+							 [spawn(forest_fire, next_cell, [self(), X, Y, World]) | PIDs]
+					 end,
+						 [], World),
+	receive_loop(length(World), []).
+
+% receive done jobs
+receive_loop(Max_length, New_world) ->
+	receive
+		Field ->
+			case length(New_world) + 1 == Max_length  of
+				true -> [Field | New_world];
+				false -> receive_loop(Max_length, [Field | New_world])
+			end
+	end.
+
+% helper for job spawning (I want Nhood to be calculated in spawned job)
+next_cell(PID, Xin, Yin, World) ->
+	PID!{Xin, Yin, rules(Xin, Yin, nhood(Xin, Yin, World))}.
 
 % find neighbourhood 3x3
 nhood(Xin, Yin, World) ->
@@ -39,9 +60,6 @@ nhood(Xin, Yin, World) ->
 % A tree will burn if at least one neighbor is burning
 % A tree ignites with probability f even if no neighbor is burning
 % An empty space fills with a tree with probability p
-
-next_cell(Xin, Yin, World) ->
-	{Xin, Yin, rules(Xin, Yin, nhood(Xin, Yin, World))}.
 
 % Nhood is matrix 3x3 like: {1, 1, on_fire}
 rules(Xin, Yin, Nhood) ->
