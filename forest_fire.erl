@@ -19,7 +19,8 @@ random_field() ->
 	end.
 
 loop(World, Delay) ->
-	print(lists:sort(World)),
+	print({clear}),
+	print_world(World),
 	M = next_generation(World),
 	timer:sleep(Delay),
 	loop(M, Delay).
@@ -92,17 +93,21 @@ maybe_fire(F) ->
 	end.
 
 % formating and printing
-print(L) when is_list(L) ->
-		io:format("["),
-		fnl(L),
-		io:format("]"),
-		io:format("\n").
+print_world([Elem]) ->
+	print(Elem),
+	io:format("\n");
 
-fnl([H]) ->
-		io:format("~p", [H]);
-fnl([H|T]) ->
-		io:format("~p,", [H]),
-		fnl(T);
-fnl([]) ->
-		ok.
+print_world([Elem | World]) ->
+	print(Elem),
+	print_world(World).
+
+print({X, Y, Field}) ->
+   io:format("\e[~p;~pH~p",[Y,X*2,field_acronym(Field)]);
+
+print({clear}) ->
+   io:format("\e[2J",[]).
+
+field_acronym(on_fire) -> f;
+field_acronym(empty) -> o ;
+field_acronym(tree) -> t.
 
