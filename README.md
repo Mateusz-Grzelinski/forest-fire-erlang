@@ -9,7 +9,7 @@ Projekt AGH, semestr 5, PWiR
 ```bash
 erl
 > c(forest_fire).
-> forest_fire:main(3, 3).
+> forest_fire:main(10, 10, 4000, 0.05, 0.01).
 ```
 
 
