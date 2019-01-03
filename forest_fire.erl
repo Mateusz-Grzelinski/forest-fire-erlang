@@ -7,52 +7,60 @@
 % P - propability of growing tree in empty space (0 to 1)
 % F - propability of igniting fire (0 to 1), typically P >> F
 main(X, Y, Delay, P, F) ->
-   % generate random forest
    World = [{XX, YY, random_field()} || XX <- lists:seq(1,Y),  YY <- lists:seq(1, X)],
-   loop(World, Delay, P, F).
-
-% generate random forest fields: empty, on_fire or tree
-random_field() ->
-   case rand:uniform(3) of
-      1 -> tree; % on_fire;
-      2 -> empty;
-      3 -> tree
-   end.
-
-loop(World, Delay, P, F) ->
-   print({clear}),
-   print_world(World),
-   New_world = next_generation(World, P, F),
-   timer:sleep(Delay),
-   loop(New_world, Delay, P, F).
-
-next_generation(World, P, F) ->
    % spawn jobs: 1 job for each cell
-   % TODO: redundant - we do not use PIDs
-   PIDs = lists:foldl(
-            fun({X, Y, _}, PIDs) ->
-                  [spawn(forest_fire, next_cell, [self(), X, Y, World, P, F]) | PIDs]
+   Workers = lists:foldl(
+            fun(_, Worker_acc) ->
+                  [spawn(forest_fire, cell_job, [self(), P, F]) | Worker_acc]
             end,
             [], World),
-   receive_loop(length(World), []).
+   loop(World, Delay, Workers).
+
+% generate start forest
+random_field() -> field(rand:uniform(2)).
+
+field(1) -> tree;
+field(2) -> empty;
+field(3) -> on_fire.
+
+loop(World, Delay, Workers) ->
+   print({clear}),
+   print_world(World),
+   New_world = next_generation(World, Workers),
+   timer:sleep(Delay),
+   loop(New_world, Delay, Workers).
+
+next_generation(World, Workers) ->
+   % send job to workers
+   Zipped = lists:zip(World, Workers),
+   lists:map(fun({Elem, PID}) -> PID!{Elem, World} end, Zipped),
+   receive_cell_job(length(World), []).
 
 % receive done jobs
-receive_loop(Max_length, New_world) ->
+receive_cell_job(Max_length, New_world) ->
    receive
       Field ->
-         case length(New_world) + 1 == Max_length  of
-            true -> [Field | New_world];
-            false -> receive_loop(Max_length, [Field | New_world])
+         case length(New_world) + 1 of
+            Max_length -> [Field | New_world];
+            _ -> receive_cell_job(Max_length, [Field | New_world])
          end
    end.
 
 % helper for job spawning (I want Nhood to be calculated in spawned job)
-next_cell(PID, Xin, Yin, World, P, F) ->
-   PID!{Xin, Yin, rules(Xin, Yin, nhood(Xin, Yin, World), P, F)}.
+cell_job(PID, P, F) ->
+   % io:format("self: ~p, PID: ~p, P: ~p, F: ~p\n", [self(), PID, P, F]),
+   receive
+      {{Xin, Yin, Middle_field}, World} ->
+         Nhood = nhood(Xin, Yin, World),
+         PID!{Xin, Yin, rules(Middle_field, Nhood, P, F)},
+         % do not exeit, wait for another job
+         cell_job(PID, P, F);
+      stop -> true
+   end.
 
-% find neighbourhood 3x3
+% find neighbourhood 3x3, without middle element
 nhood(Xin, Yin, World) ->
-   Indexes = [{X+Xin, Y+Yin} || X <- [-1,0,1], Y <- [-1,0,1] ],
+   Indexes = [{X+Xin, Y+Yin} || X <- [-1,0,1], Y <- [-1,0,1]],
    lists:filter(fun({X,Y,_}) ->
                       lists:any(fun(Elem) -> {X,Y} == Elem end, Indexes) % {X,Y} in Indexes
                 end, World).
@@ -64,8 +72,7 @@ nhood(Xin, Yin, World) ->
 % An empty space fills with a tree with probability p
 
 % Nhood is matrix 3x3 like: {1, 1, on_fire}
-rules(Xin, Yin, Nhood, P, F) ->
-   {_, {_, _, Middle_field}} = lists:search(fun({X,Y,_}) -> {X, Y}=={Xin,Yin} end, Nhood),
+rules(Middle_field, Nhood, P, F) ->
    case Middle_field of
       on_fire -> empty;
       empty -> maybe_tree(P);
@@ -98,12 +105,13 @@ print_world([Elem]) ->
    print(Elem),
    io:format("\n");
 
+print_world([]) -> io:format(' ');
 print_world([Elem | World]) ->
    print(Elem),
    print_world(World).
 
 print({X, Y, Field}) ->
-   io:format("\e[~p;~pH~p",[Y,X*2,field_acronym(Field)]);
+   io:format("\e[~p;~pH~p",[Y, X*2, field_acronym(Field)]);
 
 print({clear}) ->
    io:format("\e[2J",[]).
