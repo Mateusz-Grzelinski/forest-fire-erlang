@@ -1,6 +1,10 @@
 -module(forest_fire).
 -compile([export_all]).
 
+% wczytanie z pliku, stan początkowy zadany
+% interaktywny interfejs
+% statystyki?
+
 % X - x world length
 % Y - y world length
 % Delay - in ms between computing generations
@@ -14,21 +18,25 @@ main(X, Y, Delay, P, F) ->
                   [spawn(forest_fire, cell_job, [self(), P, F]) | Worker_acc]
             end,
             [], World),
-   loop(World, Delay, Workers).
+   loop(World, Y+1, Delay, Workers, 0).
 
 % generate start forest
 random_field() -> field(rand:uniform(2)).
 
+% allowed world values
 field(1) -> tree;
 field(2) -> empty;
 field(3) -> on_fire.
 
-loop(World, Delay, Workers) ->
+loop(World, World_Y, Delay, Workers, Generation) ->
    print({clear}),
-   print_world(World),
+   Header_height = print({header, Generation}),
+   print_world(World, Header_height),
+   print({body, Header_height + World_Y}),
+
    New_world = next_generation(World, Workers),
    timer:sleep(Delay),
-   loop(New_world, Delay, Workers).
+   loop(New_world, World_Y, Delay, Workers, Generation+1).
 
 next_generation(World, Workers) ->
    % send job to workers
@@ -58,7 +66,7 @@ cell_job(PID, P, F) ->
       stop -> true
    end.
 
-% find neighbourhood 3x3, without middle element
+% find neighbourhood 3x3
 nhood(Xin, Yin, World) ->
    Indexes = [{X+Xin, Y+Yin} || X <- [-1,0,1], Y <- [-1,0,1]],
    lists:filter(fun({X,Y,_}) ->
@@ -100,22 +108,43 @@ maybe_fire(F) ->
       R >= F -> tree
    end.
 
-% formating and printing
-print_world([Elem]) ->
-   print(Elem),
+%% formating and printing %%
+
+% return number of occupied lines
+print_world([Elem], Height_offset) ->
+   print({Elem, Height_offset}),
    io:format("\n");
 
-print_world([]) -> io:format(' ');
-print_world([Elem | World]) ->
-   print(Elem),
-   print_world(World).
+% print_world([], _, World_height) -> io:format(' '), World_height;
 
-print({X, Y, Field}) ->
-   io:format("\e[~p;~pH~p",[Y, X*2, field_acronym(Field)]);
+print_world([Elem | World], Height_offset) ->
+   print({Elem, Height_offset}),
+   print_world(World, Height_offset).
+
+% go to X,Y, print symbol and return number of occupied lines
+print({{X, Y, Field}, Height_offset}) ->
+   io:format("\e[~p;~pH~p",[Y+Height_offset, X*2, field_acronym(Field)]);
 
 print({clear}) ->
-   io:format("\e[2J",[]).
+   io:format("\e[2J",[]);
 
+% return number of occupied lines
+print({header, Pokolenie}) -> io:format("\e[~p;~pHSymulacja pożaru lasu
+o - miejsce puste
+t - drzewo
+f - pożar
+Pokolenie ~p
+\n", [0,0,Pokolenie]),
+5;
+
+% return number of occupied lines
+print({body, Yoffset}) -> io:format("\e[~p;~pHHelp:
+enter - kolejne pokolenie
+cp - zmień prawdopodobieństwo, że wyrośnie drzewo na pustym oszarze
+", [Yoffset, 0]),
+4.
+
+% field acronum used for world printing
 field_acronym(on_fire) -> f;
 field_acronym(empty) -> o ;
 field_acronym(tree) -> t.
