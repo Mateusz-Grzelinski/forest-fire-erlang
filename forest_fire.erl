@@ -11,16 +11,6 @@ main(X, Y, P, F) ->
    PIDs = start_processes(World),
    loop(World, X, Y, P, F, PIDs, 0).
 
-% X - x world length
-% Y - y world length
-% P and F are set to default values
-main(X, Y) ->
-   P = 0.1,
-   F = 0.01,
-   World = [{XX, YY, random_field()} || XX <- lists:seq(1,Y),  YY <- lists:seq(1, X)],
-   PIDs = start_processes(World),
-   loop(World, X, Y, P, F, PIDs, 0).
-
 % get all initial values from text file
 main(Filename) ->
    try file:open(Filename, [read]) of
@@ -341,8 +331,6 @@ print({foot}) -> io:format("type 'help' for help, 'stop' to exit\n");
 print({help}) -> io:format("\\n - kolejne pokolenie (znak nowej lini)
 cp - zmień prawdopodobieństwo, że wyrośnie drzewo na pustym oszarze (zakres 0 do 1)
 cf - zmień prawdopodobieństwo, że wyrośnie drzewo zapłonie (zakres 0 do 1)
-save - zapisz bieżące pokolenie do pliku
-stats - wypisz statystyki
 stop - wyjdź
 ").
 

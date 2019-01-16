@@ -1,6 +1,7 @@
 P = 0.1
 F = 0.01
-X = 2
-Y = 2
-ff
-ft
+X = 3
+Y = 3
+ffo
+fto
+ooo
